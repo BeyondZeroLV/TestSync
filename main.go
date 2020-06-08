@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -16,8 +17,8 @@ import (
 	"github.com/beyondzerolv/testsync/api/ws"
 	"github.com/beyondzerolv/testsync/utils"
 
-	"code.tdlbox.com/arturs.j.petersons/go-logging"
-	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/spf13/pflag"
 )
 
@@ -48,12 +49,26 @@ func main() {
 		panic(err)
 	}
 
-	logger, err := createLogger(conf.Logging)
+	level, err := log.ParseLevel(conf.Logging.Level)
 	if err != nil {
 		panic(err)
 	}
 
-	ws.StartWebSocketServer(logger, conf.WSPort)
+	file, err := os.OpenFile(
+		path.Join(conf.Logging.Dir, "test-sync.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666,
+	)
+	if err != nil {
+		log.Info("Failed to log to file, using default stderr")
+	}
+
+	log.SetLevel(level)
+	log.SetOutput(file)
+	log.SetFormatter(&log.TextFormatter{
+		DisableLevelTruncation: true,
+	})
+
+	ws.StartWebSocketServer(conf.WSPort)
 
 	runs.SyncClient = conf.SyncClient
 
@@ -62,10 +77,10 @@ func main() {
 		panic(err)
 	}
 
-	logger.Info("Welcome to Test Sync")
+	log.Info("Welcome to Test Sync")
 
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", conf.APIPort),
+		Addr:         fmt.Sprintf(":%d", conf.HTTPPort),
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -87,14 +102,5 @@ func main() {
 
 	server.Shutdown(context.Background()) // nolint: gosec, errcheck
 
-	logger.Info("GOODBYE")
-}
-
-func createLogger(config logging.Config) (*logging.Logging, error) {
-	_, err := logging.Init("test-sync-access", config)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not initialize access log")
-	}
-
-	return logging.Init("test-sync", config)
+	log.Info("GOODBYE")
 }

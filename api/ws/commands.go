@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/beyondzerolv/testsync/api/runs"
 	"github.com/beyondzerolv/testsync/wsutil"
@@ -17,7 +18,9 @@ const (
 	CommandWaitCheckpoint     = "wait_checkpoint"
 )
 
-func waitCheckPoint(b []byte, connIdx int, r *runs.Run) error {
+var mu *sync.Mutex
+
+func waitCheckPoint(b []byte, connIdx int, t *runs.Test) error {
 	var check struct {
 		TargetCount int    `json:"target_count"`
 		Identifier  string `json:"identifier"`
@@ -28,31 +31,40 @@ func waitCheckPoint(b []byte, connIdx int, r *runs.Run) error {
 		return errors.Wrap(err, "could not unmarshal checkpoint data")
 	}
 
-	point, ok := r.CheckPoints[check.Identifier]
+	// check if provided indentifier is already used, if it's already assigned
+	// to test, then just add this connection. In case of a new identifier a
+	// checkpoint is created.
+	point, ok := t.CheckPoints[check.Identifier]
 	if !ok {
-		r.CheckPoints[check.Identifier] = runs.CreateCheckpoint(
-			check.Identifier, check.TargetCount, r,
+		mu.Lock()
+
+		t.CheckPoints[check.Identifier] = runs.CreateCheckpoint(
+			check.Identifier, check.TargetCount, t,
 		)
 
-		point = r.CheckPoints[check.Identifier]
-	}
+		point = t.CheckPoints[check.Identifier]
 
-	if point.Finished {
-		err = wsutil.SendMessage(
-			r.Connections[connIdx],
-			"wait_checkpoint",
-			struct {
-				Command    string `json:"command"`
-				Identifier string `json:"identifier"`
-				Finished   bool   `json:"finished"`
-			}{
-				Command:    "wait_checkpoint",
-				Identifier: point.Identifier,
-				Finished:   point.Finished,
-			},
-		)
-		if err != nil {
-			return errors.Wrap(err, "could not send checkpoint update")
+		mu.Unlock()
+	} else {
+		if point.Finished {
+			// checkpoint has already finished, send a notification about
+			// checkpoint's status.
+			err = wsutil.SendMessage(
+				t.Connections[connIdx],
+				"wait_checkpoint",
+				struct {
+					Command    string `json:"command"`
+					Identifier string `json:"identifier"`
+					Finished   bool   `json:"finished"`
+				}{
+					Command:    "wait_checkpoint",
+					Identifier: point.Identifier,
+					Finished:   point.Finished,
+				},
+			)
+			if err != nil {
+				return errors.Wrap(err, "could not send checkpoint update")
+			}
 		}
 	}
 

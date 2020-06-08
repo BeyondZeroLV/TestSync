@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 
-	"code.tdlbox.com/arturs.j.petersons/go-logging"
 	"github.com/spf13/afero"
 )
 
@@ -12,9 +11,9 @@ var FS = afero.NewOsFs()
 
 // Config defines the basic configurable parameters for the service.
 type Config struct {
-	APIPort    int              `json:"api_port"`
+	HTTPPort   int              `json:"http_port"`
 	WSPort     int              `json:"ws_port"`
-	Logging    logging.Config   `json:"logging"`
+	Logging    LogConfig        `json:"logging"`
 	SyncClient BasicCredentials `json:"sync_client"`
 }
 
@@ -22,6 +21,17 @@ type Config struct {
 type BasicCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+// LogConfig defines configuration variables for logging settings.
+type LogConfig struct {
+	// Which log level to use.
+	// Available values: DEBUG, INFO, WARN, ERROR.
+	// defautls to INFO.
+	Level string `json:"level"`
+
+	// Directory where to save log file.
+	Dir string `json:"dir"`
 }
 
 // ReadConfig reads file into given config object.

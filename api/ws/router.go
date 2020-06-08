@@ -6,14 +6,22 @@ import (
 	"net/http"
 
 	"github.com/beyondzerolv/testsync/api/runs"
+	"github.com/beyondzerolv/testsync/utils"
 	"github.com/beyondzerolv/testsync/wsutil"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+
+	log "github.com/sirupsen/logrus"
 )
 
-var upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
+var (
+	// SyncClient defines sync client credentials.
+	SyncClient utils.BasicCredentials
+
+	upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
+)
 
 func newWSRouter(s *Server) http.Handler {
 	router := mux.NewRouter().StrictSlash(true)
@@ -29,7 +37,7 @@ func newWSRouter(s *Server) http.Handler {
 }
 
 func (s *Server) register(r *mux.Router) {
-	r.HandleFunc(`/{runID:\d+}`, s.registerWS).
+	r.HandleFunc(`/{testID:\d+}`, s.registerWS).
 		Name("registerWebSocket").
 		Methods(http.MethodGet)
 }
@@ -37,27 +45,31 @@ func (s *Server) register(r *mux.Router) {
 func (s *Server) registerWS(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
+	if !isUserAuthorized(w, r) {
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.logger.Errorf("Failed to upgrade connection: %s", err.Error())
+		log.Errorf("Failed to upgrade connection: %s", err.Error())
 		return
 	}
 
-	s.logger.Info("Connection established to WebSocket")
+	log.Info("Connection established to WebSocket")
 
-	runID, err := runs.GetPathID(w, r, "runID")
+	testID, err := runs.GetPathID(w, r, "testID")
 	if err != nil {
+		log.Errorf("Could not get path ID: %s", err.Error())
 		return
 	}
 
-	go s.reader(conn, runID)
+	go s.reader(conn, testID)
 }
 
-func (s *Server) reader(conn *websocket.Conn, runID int) {
-	r, ok := runs.AllRuns[runID]
+func (s *Server) reader(conn *websocket.Conn, testID int) {
+	r, ok := runs.AllTests[testID]
 	if !ok {
-		s.logger.Error("Received connection on non-existing run")
-
+		log.Error("Received connection on non-existing test")
 		return
 	}
 
@@ -68,12 +80,14 @@ func (s *Server) reader(conn *websocket.Conn, runID int) {
 		messageType, p, err := conn.ReadMessage()
 		if err != nil {
 			if messageType != -1 {
-				s.logger.Errorf(
-					"Failed to read message for %d run: %s", runID, err.Error(),
+				log.Errorf(
+					"Failed to read message for %d test: %s",
+					testID, err.Error(),
 				)
 			} else {
-				s.logger.Infof(
-					"WS connection closed for %d run: %s", runID, err.Error(),
+				log.Infof(
+					"WS connection closed for %d test: %s",
+					testID, err.Error(),
 				)
 			}
 
@@ -82,15 +96,15 @@ func (s *Server) reader(conn *websocket.Conn, runID int) {
 
 		err = s.processMessage(idx, p, r)
 		if err != nil {
-			s.logger.Errorf("Failed to process message: %s", err.Error())
+			log.Errorf("Failed to process message: %s", err.Error())
 		}
 	}
 }
 
-func (s *Server) processMessage(connIdx int, body []byte, r *runs.Run) error {
+func (s *Server) processMessage(connIdx int, body []byte, t *runs.Test) error {
 	m := &wsutil.Message{}
 
-	s.logger.Infof("Received message: %s", string(body))
+	log.Infof("Received message: %s", string(body))
 
 	err := json.Unmarshal(body, &m)
 	if err != nil {
@@ -99,22 +113,43 @@ func (s *Server) processMessage(connIdx int, body []byte, r *runs.Run) error {
 
 	switch m.Command {
 	case CommandReadData:
-		return r.Connections[connIdx].WriteMessage(0, r.Data)
+		return t.Connections[connIdx].WriteMessage(0, t.Data)
 	case CommandUpdateData:
-		r.Data = m.Content.Bytes
+		t.Data = m.Content.Bytes
 
 		return nil
 	case CommandGetConnectionCount:
 		return wsutil.SendMessage(
-			r.Connections[connIdx],
+			t.Connections[connIdx],
 			CommandGetConnectionCount,
 			struct {
 				Count int `json:"count"`
-			}{Count: len(r.Connections)},
+			}{Count: len(t.Connections)},
 		)
 	case CommandWaitCheckpoint:
-		return waitCheckPoint(m.Content.Bytes, connIdx, r)
+		return waitCheckPoint(m.Content.Bytes, connIdx, t)
 	default:
 		return errors.Errorf("received non existing command: %s", m.Command)
 	}
+}
+
+// isUserAuthorized checks if provided request has set correct authorization
+// headers.
+func isUserAuthorized(w http.ResponseWriter, r *http.Request) bool {
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		log.Debug("Could not get basic auth")
+		utils.HTTPError(w, "Request not authorized", http.StatusUnauthorized)
+
+		return false
+	}
+
+	if user != SyncClient.Username || pass != SyncClient.Password {
+		log.Debug("Could not validate user, invalid credentials")
+		utils.HTTPError(w, "Request not authorized", http.StatusUnauthorized)
+
+		return false
+	}
+
+	return true
 }

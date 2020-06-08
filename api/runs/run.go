@@ -6,9 +6,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
-	"code.tdlbox.com/arturs.j.petersons/go-logging"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/beyondzerolv/testsync/utils"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -19,14 +21,14 @@ var (
 	// SyncClient defines sync client credentials.
 	SyncClient utils.BasicCredentials
 
-	// AllRuns holds all registered runs.
-	AllRuns = make(map[int]*Run)
+	// AllTests holds all registered tests.
+	AllTests = make(map[int]*Test)
 
-	logger = logging.Get("data-sync")
+	mu *sync.Mutex
 )
 
-// Run describes a single run instance with it's saved data and connections.
-type Run struct {
+// Test describes a single test instance with it's saved data and connections.
+type Test struct {
 	Created     time.Time
 	Data        []byte
 	Connections []*websocket.Conn
@@ -34,9 +36,10 @@ type Run struct {
 	ForceEnd    bool
 }
 
-// RegisterRunsRoutes registers all runs routes.
-func RegisterRunsRoutes(r *mux.Router) {
-	subrouter := r.PathPrefix(`/runs/{runID:\d+}`).Subrouter().StrictSlash(true)
+// RegisterTestsRoutes registers all tests routes.
+func RegisterTestsRoutes(r *mux.Router) {
+	subrouter := r.PathPrefix(`/tests/{testID:\d+}`).
+		Subrouter().StrictSlash(true)
 
 	ticker := time.NewTicker(12 * time.Hour)
 
@@ -45,9 +48,9 @@ func RegisterRunsRoutes(r *mux.Router) {
 			deleteLimit := time.Now()
 			deleteLimit = deleteLimit.Add(time.Hour * -12)
 
-			for runID, r := range AllRuns {
+			for testID, r := range AllTests {
 				if r.Created.Before(deleteLimit) {
-					delete(AllRuns, runID)
+					delete(AllTests, testID)
 				}
 			}
 		}
@@ -62,14 +65,16 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := GetPathID(w, r, "runID")
+	testID, err := GetPathID(w, r, "testID")
 	if err != nil {
+		log.Errorf("Could not get test ID: %s", err.Error())
 		return
 	}
 
-	if _, ok := AllRuns[runID]; ok {
+	if _, ok := AllTests[testID]; ok {
+		log.Errorf("Could not get test: %d", testID)
 		utils.HTTPError(
-			w, "Provided run already has set data", http.StatusConflict,
+			w, "Provided test already has set data", http.StatusConflict,
 		)
 
 		return
@@ -77,25 +82,21 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := readBodyData(w, r.Body)
 	if err != nil {
+		log.Errorf("Could not read body data: %s", err.Error())
 		return
 	}
 
-	if len(body) == 0 {
-		logger.Debug("Received request with no body")
-		utils.HTTPError(
-			w, "Request requires body data", http.StatusBadRequest,
-		)
+	mu.Lock()
 
-		return
-	}
-
-	AllRuns[runID] = &Run{
+	AllTests[testID] = &Test{
 		Created:     time.Now(),
 		Data:        body,
 		CheckPoints: make(map[string]*Checkpoint),
 	}
 
-	logger.Infof("Set data for run %d", runID)
+	mu.Unlock()
+
+	log.Infof("Set data for test %d", testID)
 
 	writeResponse(w, body, http.StatusOK)
 }
@@ -105,20 +106,20 @@ func readHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := GetPathID(w, r, "runID")
+	testID, err := GetPathID(w, r, "testID")
 	if err != nil {
 		return
 	}
 
-	m, ok := AllRuns[runID]
+	m, ok := AllTests[testID]
 	if !ok {
-		logger.Debugf("Data not found for run: %d", runID)
-		utils.HTTPError(w, "Could not find run", http.StatusNotFound)
+		log.Debugf("Data not found for test: %d", testID)
+		utils.HTTPError(w, "Could not find test", http.StatusNotFound)
 
 		return
 	}
 
-	logger.Infof("Reading data for run %d", runID)
+	log.Infof("Reading data for test %d", testID)
 
 	writeResponse(w, m.Data, http.StatusOK)
 }
@@ -134,7 +135,7 @@ func readBodyData(w http.ResponseWriter, body io.ReadCloser) ([]byte, error) {
 		http.MaxBytesReader(w, body, 1024*1024*10),
 	)
 	if err != nil {
-		logger.Debugf("Could not read body: %s", err.Error())
+		log.Debugf("Could not read body: %s", err.Error())
 		utils.HTTPError(
 			w, "Request data too large", http.StatusRequestEntityTooLarge,
 		)
@@ -151,7 +152,7 @@ func GetPathID(
 ) (int, error) {
 	id, err := strconv.Atoi(mux.Vars(r)[field])
 	if err != nil {
-		logger.Debugf(
+		log.Debugf(
 			"Unable to parse %s as int: invalid integer %q",
 			field, mux.Vars(r)[field],
 		)
@@ -175,17 +176,19 @@ func writeResponse(w http.ResponseWriter, resp []byte, code int) {
 	w.Write(resp) // nolint: gosec, errcheck
 }
 
+// isUserAuthorized checks if provided request has set correct authorization
+// headers.
 func isUserAuthorized(w http.ResponseWriter, r *http.Request) bool {
 	user, pass, ok := r.BasicAuth()
 	if !ok {
-		logger.Debug("Could not get basic auth")
+		log.Debug("Could not get basic auth")
 		utils.HTTPError(w, "Request not authorized", http.StatusUnauthorized)
 
 		return false
 	}
 
 	if user != SyncClient.Username || pass != SyncClient.Password {
-		logger.Debug("Could not validate user, invalid credentials")
+		log.Debug("Could not validate user, invalid credentials")
 		utils.HTTPError(w, "Request not authorized", http.StatusUnauthorized)
 
 		return false
