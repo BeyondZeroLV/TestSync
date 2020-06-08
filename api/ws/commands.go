@@ -18,7 +18,7 @@ const (
 	CommandWaitCheckpoint     = "wait_checkpoint"
 )
 
-var mu *sync.Mutex
+var mu = &sync.Mutex{}
 
 func waitCheckPoint(b []byte, connIdx int, t *runs.Test) error {
 	var check struct {

@@ -24,7 +24,7 @@ var (
 	// AllTests holds all registered tests.
 	AllTests = make(map[int]*Test)
 
-	mu *sync.Mutex
+	mu = &sync.Mutex{}
 )
 
 // Test describes a single test instance with it's saved data and connections.
