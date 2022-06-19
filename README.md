@@ -1,3 +1,9 @@
+# WARNING
+As of now, this repository is experimental and should mostly used as reference 
+or to create your own fork.
+The tool may contain critical issues. 
+Future versions may introduce breaking changes.
+
 # TestSync
 TestSync is a easy use Go based test agent synchronization tool by utitilzing 
 action synchronization algorithms and data sharing.
