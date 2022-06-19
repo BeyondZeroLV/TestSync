@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/beyondzerolv/testsync/api"
+	"github.com/paulsgrudups/testsync/api"
 
-	"github.com/beyondzerolv/testsync/api/runs"
-	"github.com/beyondzerolv/testsync/api/ws"
-	"github.com/beyondzerolv/testsync/utils"
+	"github.com/paulsgrudups/testsync/api/runs"
+	"github.com/paulsgrudups/testsync/api/ws"
+	"github.com/paulsgrudups/testsync/utils"
 
 	log "github.com/sirupsen/logrus"
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"code.tdlbox.com/arturs.j.petersons/go-logging"
+	log "github.com/sirupsen/logrus"
 )
 
 // ErrorResponse will be sent in case an error occurs during request processing.
@@ -35,7 +35,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 // LogRequests returns handler function that processes all incoming HTTP
 // requests all requests are logged to specified file.
-func LogRequests(next http.Handler, l *logging.Logging) http.Handler {
+func LogRequests(next http.Handler) http.Handler {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		rw := newResponseWriter(w)
 		start := time.Now()
@@ -47,28 +47,13 @@ func LogRequests(next http.Handler, l *logging.Logging) http.Handler {
 			reqPath += "?"
 		}
 
-		l.Infof(
-			"[%s] %s:\t%s  - %d (%s)",
-			time.Since(start),
-			r.Method,
-			reqPath,
-			rw.statusCode,
-			GetRemoteAddr(r),
+		log.Infof(
+			"[%s] %s:\t%s  - %d",
+			time.Since(start), r.Method, reqPath, rw.statusCode,
 		)
 	}
 
 	return http.HandlerFunc(handler)
-}
-
-// GetRemoteAddr returns user real IP address. Needed in case of nginx proxy
-// configuration.
-func GetRemoteAddr(r *http.Request) string {
-	h := r.Header.Get("X-Real-IP")
-	if h != "" {
-		return h
-	}
-
-	return r.RemoteAddr
 }
 
 // HTTPError writes Loadero's default error response.

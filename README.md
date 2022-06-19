@@ -9,7 +9,7 @@ Go - `brew install go`
 
 ## Usage
 To use this synchronization tool all you have to do is clone this repository
-1) `git clone git@github.com:BeyondZeroLV/TestSync.git`
+1) `git clone git@github.com:paulsgrudups/TestSync.git`
 2) Download all Go modules - `go mod download`
 3) Build binary - `go build`
 4) Create config file

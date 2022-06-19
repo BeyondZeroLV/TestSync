@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
-	"github.com/beyondzerolv/testsync/api/runs"
-	"github.com/beyondzerolv/testsync/utils"
-	"github.com/beyondzerolv/testsync/wsutil"
+	"github.com/paulsgrudups/testsync/api/runs"
+	"github.com/paulsgrudups/testsync/utils"
+	"github.com/paulsgrudups/testsync/wsutil"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -45,10 +46,6 @@ func (s *Server) register(r *mux.Router) {
 func (s *Server) registerWS(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
-	if !isUserAuthorized(w, r) {
-		return
-	}
-
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("Failed to upgrade connection: %s", err.Error())
@@ -69,7 +66,14 @@ func (s *Server) registerWS(w http.ResponseWriter, r *http.Request) {
 func (s *Server) reader(conn *websocket.Conn, testID int) {
 	r, ok := runs.AllTests[testID]
 	if !ok {
-		log.Error("Received connection on non-existing test")
+		log.Debugf("Received connection on non-existing test, will create")
+
+		runs.AllTests[testID] = &runs.Test{
+			Created:     time.Now(),
+			Connections: []*websocket.Conn{conn},
+			CheckPoints: make(map[string]*runs.Checkpoint),
+		}
+
 		return
 	}
 

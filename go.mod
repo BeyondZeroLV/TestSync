@@ -1,14 +1,17 @@
-module github.com/beyondzerolv/testsync
+module github.com/paulsgrudups/testsync
 
-go 1.13
+go 1.18
 
 require (
-	code.tdlbox.com/arturs.j.petersons/go-logging v1.2.0
-	github.com/gorilla/mux v1.7.4
-	github.com/gorilla/websocket v1.4.2
+	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/websocket v1.5.0
 	github.com/pkg/errors v0.9.1
-	github.com/sirupsen/logrus v1.6.0
-	github.com/spf13/afero v1.2.2
+	github.com/sirupsen/logrus v1.8.1
+	github.com/spf13/afero v1.8.2
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/text v0.3.2 // indirect
+)
+
+require (
+	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c // indirect
+	golang.org/x/text v0.3.7 // indirect
 )

@@ -3,7 +3,7 @@ package runs
 import (
 	"time"
 
-	"github.com/beyondzerolv/testsync/wsutil"
+	"github.com/paulsgrudups/testsync/wsutil"
 	log "github.com/sirupsen/logrus"
 )
 

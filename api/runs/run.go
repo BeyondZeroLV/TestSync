@@ -11,9 +11,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/beyondzerolv/testsync/utils"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/paulsgrudups/testsync/utils"
 	"github.com/pkg/errors"
 )
 
@@ -176,8 +176,6 @@ func writeResponse(w http.ResponseWriter, resp []byte, code int) {
 	w.Write(resp) // nolint: gosec, errcheck
 }
 
-// isUserAuthorized checks if provided request has set correct authorization
-// headers.
 func isUserAuthorized(w http.ResponseWriter, r *http.Request) bool {
 	user, pass, ok := r.BasicAuth()
 	if !ok {

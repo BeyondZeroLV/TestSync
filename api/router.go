@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/beyondzerolv/testsync/api/runs"
-	"github.com/beyondzerolv/testsync/utils"
+	"github.com/paulsgrudups/testsync/api/runs"
+	"github.com/paulsgrudups/testsync/utils"
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
