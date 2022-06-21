@@ -15,6 +15,7 @@ const (
 	CommandUpdateData         = "update_data"
 	CommandGetConnectionCount = "get_connection_count"
 	CommandWaitCheckpoint     = "wait_checkpoint"
+	CommandClose              = "close"
 )
 
 var mu = &sync.Mutex{}

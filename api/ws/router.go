@@ -46,6 +46,11 @@ func (s *Server) register(r *mux.Router) {
 func (s *Server) registerWS(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
+	// Uncomment if user needs to be validated
+	// if !isUserAuthorized(w, r) {
+	// 	return
+	// }
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("Failed to upgrade connection: %s", err.Error())
@@ -64,17 +69,34 @@ func (s *Server) registerWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) reader(conn *websocket.Conn, testID int) {
+	closeC := make(chan bool)
+	defer close(closeC)
+
+	go func() {
+		for {
+			select {
+			case <-closeC:
+				return
+			case <-time.After(10 * time.Second):
+				err := conn.WriteMessage(websocket.PingMessage, []byte("ping"))
+				if err != nil {
+					log.Errorf(
+						"Could not send WS ping message: %s", err.Error(),
+					)
+				}
+			}
+		}
+	}()
+
 	r, ok := runs.AllTests[testID]
 	if !ok {
-		log.Debugf("Received connection on non-existing test, will create")
-
 		runs.AllTests[testID] = &runs.Test{
 			Created:     time.Now(),
-			Connections: []*websocket.Conn{conn},
+			Connections: []*websocket.Conn{},
 			CheckPoints: make(map[string]*runs.Checkpoint),
 		}
 
-		return
+		r = runs.AllTests[testID]
 	}
 
 	r.Connections = append(r.Connections, conn)
@@ -94,6 +116,8 @@ func (s *Server) reader(conn *websocket.Conn, testID int) {
 					testID, err.Error(),
 				)
 			}
+
+			closeC <- true
 
 			return
 		}
@@ -132,6 +156,9 @@ func (s *Server) processMessage(connIdx int, body []byte, t *runs.Test) error {
 		)
 	case CommandWaitCheckpoint:
 		return waitCheckPoint(m.Content.Bytes, connIdx, t)
+	case CommandClose:
+		// TODO: Add error handling
+		return t.Connections[connIdx].Close()
 	default:
 		return errors.Errorf("received non existing command: %s", m.Command)
 	}

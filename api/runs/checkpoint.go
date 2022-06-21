@@ -27,7 +27,6 @@ func CreateCheckpoint(identifier string, target int, t *Test) *Checkpoint {
 	}
 
 	go func() {
-		log.Info("Creating listener for events.")
 		for range cp.connEvents {
 			log.Info("Got event, checking!")
 			if len(cp.ConnectionIdx) >= cp.TargetCount {
@@ -52,26 +51,23 @@ func (cp *Checkpoint) AddConnection(idx int) {
 	cp.ConnectionIdx = append(cp.ConnectionIdx, idx)
 
 	if !cp.Finished {
-		log.Debug("Sending event about connection")
 		cp.connEvents <- true
 	}
 }
 
 func (cp *Checkpoint) broadcastStatus(t *Test) {
 	for _, idx := range cp.ConnectionIdx {
-		log.Debug("Sending broadcast message")
-
 		err := wsutil.SendMessage(
 			t.Connections[idx],
 			"wait_checkpoint",
 			struct {
 				Identifier string `json:"identifier"`
 				Finished   bool   `json:"finished"`
-				StartAt    int    `json:"start_at"`
+				StartAt    int64  `json:"start_at"`
 			}{
 				Identifier: cp.Identifier,
 				Finished:   cp.Finished,
-				StartAt:    int(time.Now().Add(time.Millisecond * 100).Unix()),
+				StartAt:    time.Now().Add(time.Millisecond * 500).UnixMilli(),
 			},
 		)
 		if err != nil {

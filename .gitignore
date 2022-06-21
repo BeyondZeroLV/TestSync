@@ -16,4 +16,4 @@
 
 *.log
 config
-testing
+node_modules
