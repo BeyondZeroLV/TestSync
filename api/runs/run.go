@@ -3,7 +3,6 @@ package runs
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"sync"
@@ -131,9 +130,7 @@ func readBodyData(w http.ResponseWriter, body io.ReadCloser) ([]byte, error) {
 
 	defer body.Close() //nolint:errcheck
 
-	bodyContent, err := ioutil.ReadAll(
-		http.MaxBytesReader(w, body, 1024*1024*10),
-	)
+	bodyContent, err := io.ReadAll(http.MaxBytesReader(w, body, 1024*1024*10))
 	if err != nil {
 		log.Debugf("Could not read body: %s", err.Error())
 		utils.HTTPError(
