@@ -10,9 +10,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "chromedriver": "102.0.0",
-    "geckodriver": "3.0.1",
-    "nightwatch": "^1.7.11"
+    "chromedriver": "121.0.0",
+    "geckodriver": "0.34.0",
+    "nightwatch": "^3.3.1"
   },
   "dependencies": {
     "websocket": "^1.0.34",
